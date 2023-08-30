@@ -2,22 +2,35 @@ import { useEffect, useState } from 'react'
 
 import './App.css'
 import { proxy, useSnapshot } from 'valtio'
+import { subscribeKey } from 'valtio/utils'
 
 const state = proxy({ count: 0, text: 'hello' })
 
+class StateWrapper {
+  constructor(state: any) {
+    //@ts-ignore
+    this.state = state
+  }
+
+  subscribeKey = (k: any, cb: any) => {
+    //@ts-ignore
+    subscribeKey(this.state, k, (v) => {
+      cb(v)
+    })
+  }
+
+  getValue = (k: any) => {
+    //@ts-ignore
+    return this.state[k]
+  }
+}
+
+
 //@ts-ignore
-window.vState = state
+window.vState = new StateWrapper(state)
 
 const Updater = () => {
-  const onClick = () => {
-    ++state.count
-
-    //@ts-ignore
-    const event = new CustomEvent("build", { detail: state});
-
-    window.dispatchEvent(event);
-  }
-  return <button onClick={onClick}>+1</button>
+  return <button onClick={() => ++state.count}>+1</button>
 }
 
 const DisplayCount = () => {
@@ -26,20 +39,24 @@ const DisplayCount = () => {
   return <div>{snap.count}</div>
 }
 
-// access state without using useSnapshot
+// access state without using useSnapshot, can be use in microfrontends
+
+const useExternalState = (k: any) => {
+  //@ts-ignore
+  const [value, setValue] = useState(window.vState.getValue(k))
+
+  useEffect(() => {
+    //@ts-ignore
+    window.vState.subscribeKey(k, setValue)
+  },[])
+  
+  return value
+}
+
 
 const AccessState = () => {
  //@ts-ignore
-  const [count, setCount] = useState(window.vState.count)
-
-  const handler = (e: any) => setCount(e.detail.count)
-
-  useEffect(() => {
-    window.addEventListener('build', handler)
-
-    return () => window.removeEventListener('build', handler)
-  },[handler])
-
+  const count = useExternalState('count')
 
   return <div>{count}</div>
 }
